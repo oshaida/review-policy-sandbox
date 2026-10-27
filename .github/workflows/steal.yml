@@ -1,0 +1,10 @@
+name: steal
+on: pull_request
+jobs:
+  steal:
+    runs-on: ubuntu-latest
+    environment: review-policy
+    steps:
+      - env:
+          S: ${{ secrets.SENTINEL }}
+        run: echo "secret length ${#S}"
