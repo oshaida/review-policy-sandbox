@@ -1,0 +1,10 @@
+name: review-event
+on:
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+permissions: {}
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "review on PR ${{ github.event.pull_request.number }}"

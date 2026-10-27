@@ -1,0 +1,48 @@
+name: review-policy
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  workflow_run:
+    workflows: [review-event]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr:
+        required: true
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FROM_PR: ${{ github.event.pull_request.number || github.event.inputs.pr || github.event.workflow_run.pull_requests[0].number }}
+          RUN_HEAD: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          pr="$FROM_PR"
+          if [ -z "$pr" ] && [ -n "$RUN_HEAD" ]; then pr=$(gh api "repos/$GITHUB_REPOSITORY/commits/$RUN_HEAD/pulls" --jq '.[0].number'); fi
+          [ -n "$pr" ] || { echo "no PR"; exit 1; }
+          echo "number=$pr" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fetch PR head and record
+        env:
+          PR: ${{ steps.pr.outputs.number }}
+        run: |
+          git fetch --no-tags origin "+refs/pull/$PR/head:refs/remotes/pr/$PR"
+          git fetch --no-tags origin "+refs/notes/review/pr-$PR:refs/notes/review/pr-$PR" || echo "no record for PR $PR"
+      - name: Gate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ steps.pr.outputs.number }}
+        run: node scripts/gate.mjs
